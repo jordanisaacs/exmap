@@ -1,7 +1,7 @@
 all: modules
 
 # out-of-tree build for our kernel-module, firmware and inmates
-KDIR ?= /lib/modules/`uname -r`/build
+KDIR ?= $(kernel)/lib/modules/$(kernelVersion)/build
 
 obj-m = exmap.o
 exmap-m = driver.o memory.o ksyms.o
