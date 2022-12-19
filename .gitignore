@@ -24,3 +24,4 @@ modules.builtin
 *.gcno
 
 Module.symvers
+result
