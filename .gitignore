@@ -26,3 +26,4 @@ modules.builtin
 Module.symvers
 result
 result-dev
+compile_commands.json
