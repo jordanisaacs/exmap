@@ -70,6 +70,6 @@ int exmap_unmap_pages(struct vm_area_struct *vma,
 					  struct exmap_pages_ctx* ctx);
 					  /* struct free_pages *pages); */
 
-// #define exmap_debug(...) pr_info("exmap:" __VA_ARGS__)
-#define exmap_debug(...) 
+#define exmap_debug(...) pr_info("exmap:" __VA_ARGS__)
+// #define exmap_debug(...) 
 

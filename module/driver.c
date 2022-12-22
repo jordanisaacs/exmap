@@ -396,7 +396,7 @@ static int exmap_mmap(struct file *file, struct vm_area_struct *vma) {
 			return -EINVAL;
 
 		interface = (&ctx->interfaces[idx]);
-		// pr_info("mmap interface[%d]: 0x%lx size=%d\n", idx, interface->usermem, sz);
+		exmap_debug("mmap interface[%d]: 0x%lx size=%d\n", idx, interface->usermem, sz);
 
 
 		// Map the struct exmap_user_interface into the userspace
