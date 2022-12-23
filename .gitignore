@@ -1,10 +1,12 @@
 /target
 /result
 /result-dev
+.secret
 
 # Added by cargo
 #
 # already existing elements were commented out
 
 #/target
-/Cargo.lock
+
+nixos.qcow2

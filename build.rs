@@ -9,10 +9,21 @@ impl bindgen::callbacks::ParseCallbacks for Fix753 {
     }
 }
 
+#[derive(Debug)]
+pub struct AnonIov {}
+impl bindgen::callbacks::ParseCallbacks for AnonIov {
+    fn item_name(&self, _original_item_name: &str) -> Option<String> {
+        if _original_item_name == "exmap_iov__bindgen_ty_1__bindgen_ty_1" {
+            Some("ExmapIov".to_owned())
+        } else {
+            Some(_original_item_name.to_owned())
+        }
+    }
+}
+
 fn main() {
     const INCLUDE: &str = r#"
 #include <linux/exmap.h>
-#include <asm-generic/unistd.h>
 
 #define MARK_FIX_753(req_name) const unsigned long int Fix753_##req_name = req_name;
 
@@ -20,6 +31,10 @@ MARK_FIX_753(EXMAP_IOCTL_ACTION);
 MARK_FIX_753(EXMAP_IOCTL_SETUP);
     "#;
 
+    #[cfg(not(feature = "overwrite"))]
+    let outdir = PathBuf::from(env::var("OUT_DIR").unwrap());
+
+    #[cfg(feature = "overwrite")]
     let outdir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("src/sys");
 
     let builder = bindgen::Builder::default().header_contents("include-file.h", INCLUDE);
@@ -31,6 +46,7 @@ MARK_FIX_753(EXMAP_IOCTL_SETUP);
         .allowlist_type("exmap_.*")
         .anon_fields_prefix("anon")
         .parse_callbacks(Box::new(Fix753 {}))
+        .parse_callbacks(Box::new(AnonIov {}))
         .prepend_enum_name(false)
         .use_core()
         .generate()

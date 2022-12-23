@@ -86,7 +86,6 @@ pub const EXMAP_USER_INTERFACE_PAGES: u32 = 512;
 pub const EXMAP_OFF_EXMAP: u32 = 0;
 pub const EXMAP_OFF_INTERFACE_BASE: i64 = -2305843009213693952;
 pub const EXMAP_OFF_INTERFACE_MAX: i64 = -1152921504606846976;
-pub const __NR_ioctl: u32 = 29;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct exmap_iov {
@@ -96,36 +95,30 @@ pub struct exmap_iov {
 #[derive(Copy, Clone)]
 pub union exmap_iov__bindgen_ty_1 {
     pub value: u64,
-    pub anon1: exmap_iov__bindgen_ty_1__bindgen_ty_1,
+    pub anon1: ExmapIov,
     pub anon2: exmap_iov__bindgen_ty_1__bindgen_ty_2,
 }
 #[repr(C)]
 #[repr(align(8))]
 #[derive(Debug, Default, Copy, Clone)]
-pub struct exmap_iov__bindgen_ty_1__bindgen_ty_1 {
+pub struct ExmapIov {
     pub _bitfield_align_1: [u64; 0],
     pub _bitfield_1: __BindgenBitfieldUnit<[u8; 8usize]>,
 }
 #[test]
-fn bindgen_test_layout_exmap_iov__bindgen_ty_1__bindgen_ty_1() {
+fn bindgen_test_layout_ExmapIov() {
     assert_eq!(
-        ::core::mem::size_of::<exmap_iov__bindgen_ty_1__bindgen_ty_1>(),
+        ::core::mem::size_of::<ExmapIov>(),
         8usize,
-        concat!(
-            "Size of: ",
-            stringify!(exmap_iov__bindgen_ty_1__bindgen_ty_1)
-        )
+        concat!("Size of: ", stringify!(ExmapIov))
     );
     assert_eq!(
-        ::core::mem::align_of::<exmap_iov__bindgen_ty_1__bindgen_ty_1>(),
+        ::core::mem::align_of::<ExmapIov>(),
         8usize,
-        concat!(
-            "Alignment of ",
-            stringify!(exmap_iov__bindgen_ty_1__bindgen_ty_1)
-        )
+        concat!("Alignment of ", stringify!(ExmapIov))
     );
 }
-impl exmap_iov__bindgen_ty_1__bindgen_ty_1 {
+impl ExmapIov {
     #[inline]
     pub fn page(&self) -> u64 {
         unsafe { ::core::mem::transmute(self._bitfield_1.get(0usize, 52u8) as u64) }
@@ -471,5 +464,5 @@ pub const EXMAP_OP_WRITE: exmap_opcode = 3;
 pub type exmap_opcode = ::core::ffi::c_uint;
 pub const EXMAP_ALLOC_PROBE: exmap_flags = 1;
 pub type exmap_flags = ::core::ffi::c_uint;
-pub const EXMAP_IOCTL_ACTION: ::core::ffi::c_ulong = 1074817794;
-pub const EXMAP_IOCTL_SETUP: ::core::ffi::c_ulong = 1075342081;
+pub const Fix753_EXMAP_IOCTL_ACTION: ::core::ffi::c_ulong = 1074817794;
+pub const Fix753_EXMAP_IOCTL_SETUP: ::core::ffi::c_ulong = 1075342081;

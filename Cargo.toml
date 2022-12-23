@@ -3,10 +3,20 @@ name = "exmap"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "exmap"
+path = "src/lib.rs"
+
+[[bin]]
+name = "exmap"
+path = "src/bin.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 sc = { version = "0.2.7"}
+rustix = {version = "0.36.5", features = ["mm", "fs"]}
+thiserror = "1.0.38"
 
 [build-dependencies]
 bindgen = "0.63.0"
