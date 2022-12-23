@@ -35,3 +35,6 @@ modules.builtin
 *.gcno
 
 Module.symvers
+result
+result-dev
+compile_commands.json
