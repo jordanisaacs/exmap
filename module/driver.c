@@ -82,6 +82,9 @@ void push_bundle(struct page_bundle bundle, struct exmap_ctx* ctx) {
 
 struct page_bundle pop_bundle(struct exmap_ctx* ctx) {
 	struct llist_node* first;
+    struct page* page;
+    struct page_bundle ret;
+
 	spin_lock(&ctx->free_list_lock);
 	first = llist_del_first(&ctx->global_free_list);
 	spin_unlock(&ctx->free_list_lock);
@@ -93,8 +96,8 @@ struct page_bundle pop_bundle(struct exmap_ctx* ctx) {
 		return ret;
 	}
 
-	struct page* page = container_of((struct address_space**) first, struct page, mapping);
-	struct page_bundle ret = {
+	page = container_of((struct address_space**) first, struct page, mapping);
+	ret = (struct page_bundle){
 		.stack = page,
 		.count = 512,
 	};
@@ -109,12 +112,13 @@ struct page_bundle pop_bundle(struct exmap_ctx* ctx) {
 
 void push_page(struct page* page, struct page_bundle* bundle, struct exmap_ctx* ctx) {
 	/* pr_info("push_page: %lx, bundle %lx, count %lu, global %lx", page, bundle, bundle->count, global_free_list); */
+    void* stack_page_virt;
 
 	if (!bundle->stack) {
 		bundle->stack = page;
 		return;
 	}
-	void* stack_page_virt = page_to_virt(bundle->stack);
+	stack_page_virt = page_to_virt(bundle->stack);
 	((struct page**) stack_page_virt)[bundle->count++] = page;
 	/* pr_info("set entry %lu of virt %lx: %lx", bundle->count-1, stack_page_virt, page); */
 
@@ -127,7 +131,7 @@ void push_page(struct page* page, struct page_bundle* bundle, struct exmap_ctx* 
 
 struct page* pop_page(struct page_bundle* bundle, struct exmap_ctx* ctx) {
 again:
-	/* pr_info("pop_page: bundle %lx, count %lu, global %lx", bundle, bundle->count, global_free_list); */
+	pr_info("pop_page: bundle %px, count %lu, global %px", bundle, bundle->count, &ctx->global_free_list);
 	if (bundle->count > 0) {
 		void* stack_page_virt = page_to_virt(bundle->stack);
 		struct page* page = ((struct page**) stack_page_virt)[--bundle->count];
@@ -197,13 +201,15 @@ struct page* exmap_alloc_page_system(void) {
 
 struct page* exmap_alloc_page_contig(struct exmap_ctx* ctx) {
 	/* BUG_ON(ctx->contig_counter >= ctx->contig_size); */
+    struct page* page;
+    
 	if (ctx->contig_counter >= ctx->contig_size)
 		return NULL;
 
 	/* NOTE: beware of pointer arithmetic, this adds counter*sizeof(struct page) each time */
 	/* TODO: lock needed? */
 	spin_lock(&ctx->contig_lock);
-	struct page* page = ctx->contig_pages + ctx->contig_counter++;
+	page = ctx->contig_pages + ctx->contig_counter++;
 	ctx->alloc_count++;
 	spin_unlock(&ctx->contig_lock);
 	/* pr_info("alloc_contig: got page %lx (virt %lx), counter now %u\n", page, page_to_virt(page), ctx->contig_counter); */
@@ -214,10 +220,11 @@ struct page* exmap_alloc_page_contig(struct exmap_ctx* ctx) {
 
 void exmap_free_stack(struct page* stack, unsigned count) {
 	/* interface-local free pages stack can temporarily be NULL until the next page gets pushed */
+    void* stack_page_virt;
 	if (!stack)
 		return;
 
-	void* stack_page_virt = page_to_virt(stack);
+	stack_page_virt = page_to_virt(stack);
 	while (count > 0) {
 		struct page* page = ((struct page**) stack_page_virt)[--count];
 		/* pr_info("bundle: free page %lx, %d remaining, stack %lx (virt %lx)", page, count, stack, stack_page_virt); */
@@ -234,6 +241,7 @@ static void vm_close(struct vm_area_struct *vma) {
 	struct exmap_ctx *ctx = vma->vm_private_data;
 	unsigned long freed_pages = 0, unlocked_pages = 0;
 	int idx;
+    struct llist_node* node;
 
 	if (!ctx->interfaces)
 		return;
@@ -262,7 +270,7 @@ static void vm_close(struct vm_area_struct *vma) {
 	pr_info("vm_close: free global list entries");
 
 	spin_lock(&ctx->free_list_lock);
-	struct llist_node* node = llist_del_all(&ctx->global_free_list);
+	node = llist_del_all(&ctx->global_free_list);
 	spin_unlock(&ctx->free_list_lock);
 	while (node) {
 		struct page* stack = container_of((struct address_space**) node, struct page, mapping);
@@ -271,7 +279,7 @@ static void vm_close(struct vm_area_struct *vma) {
 
 		/* When this gets triggered, the global list is corrupted */
 		if (node == node->next) {
-			pr_err("vm_close: circular global list node (%lx) == node->next", node);
+			pr_err("vm_close: circular global list node (%px) == node->next", node);
 			BUG_ON(node == node->next);
 			break;
 		}
@@ -396,7 +404,7 @@ static int exmap_mmap(struct file *file, struct vm_area_struct *vma) {
 			return -EINVAL;
 
 		interface = (&ctx->interfaces[idx]);
-		exmap_debug("mmap interface[%d]: 0x%lx size=%d\n", idx, interface->usermem, sz);
+		exmap_debug("mmap interface[%d]: 0x%px size=%zu\n", idx, interface->usermem, sz);
 
 
 		// Map the struct exmap_user_interface into the userspace
@@ -609,17 +617,21 @@ exmap_alloc(struct exmap_ctx *ctx, struct exmap_action_params *params) {
 	unsigned int  iov_len             = params->iov_len;
 	unsigned long nr_pages_alloced    = 0;
 	int idx, rc = 0, failed = 0;
-	struct exmap_alloc_ctx alloc_ctx = {
+    unsigned num_pages = iov_len;
+
+    struct exmap_pages_ctx pages_ctx;
+    struct exmap_alloc_ctx alloc_ctx;
+
+	alloc_ctx = (struct exmap_alloc_ctx){
 		.ctx = ctx,
 		.interface = interface,
 		.flags = params->flags,
 	};
 
-	if (iov_len == 0)
+	if (num_pages == 0)
 		return failed;
 
 	/* allocate pages from the system if possible */
-	unsigned num_pages = iov_len;
 	while (unlikely(ctx->alloc_count < ctx->buffer_size) && num_pages > 0) {
 #ifdef USE_CONTIG_ALLOC
 		struct page* page = exmap_alloc_page_contig(ctx);
@@ -628,7 +640,7 @@ exmap_alloc(struct exmap_ctx *ctx, struct exmap_action_params *params) {
 		ctx->alloc_count++;
 #endif
 		if (!page) {
-			pr_warn("exmap_alloc: no page, alloc=%lu, alloc_max=%lu, contig=%lu, contig_max=%lu\n",
+			pr_warn("exmap_alloc: no page, alloc=%lu, alloc_max=%lu, contig=%u, contig_max=%lu\n",
 				ctx->alloc_count, ctx->buffer_size, ctx->contig_counter, ctx->contig_size);
 			break;
 		}
@@ -643,7 +655,7 @@ exmap_alloc(struct exmap_ctx *ctx, struct exmap_action_params *params) {
 	// Do we really need this lock?
 	mmap_read_lock(vma->vm_mm);
 
-	struct exmap_pages_ctx pages_ctx = {
+	pages_ctx = (struct exmap_pages_ctx){
 		.ctx = ctx,
 		.interface = interface,
 		.pages_count = iov_len,
@@ -694,6 +706,8 @@ exmap_free(struct exmap_ctx *ctx, struct exmap_action_params *params) {
 	struct vm_area_struct  *vma       = ctx->exmap_vma;
 	unsigned int  iov_len             = params->iov_len;
 	int idx, rc = 0, failed = 0;
+
+    struct exmap_pages_ctx pages_ctx;
 	/* FREE_PAGES(free_pages); */
 
 	if (iov_len == 0)
@@ -702,7 +716,7 @@ exmap_free(struct exmap_ctx *ctx, struct exmap_action_params *params) {
 	// Do we really need this lock?
 	mmap_read_lock(vma->vm_mm);
 
-	struct exmap_pages_ctx pages_ctx = {
+	pages_ctx = (struct exmap_pages_ctx){
 		.ctx = ctx,
 		.interface = interface,
 		.pages_count = 0,
@@ -929,7 +943,7 @@ static long exmap_ioctl (struct file *file, unsigned int cmd, unsigned long arg)
 }
 
 ssize_t exmap_alloc_iter(struct exmap_ctx *ctx, struct exmap_interface *interface, struct iov_iter *iter) {
-	ssize_t total_nr_pages = iov_iter_count(iter) >> PAGE_SHIFT;
+	// ssize_t total_nr_pages = iov_iter_count(iter) >> PAGE_SHIFT;
 	struct iov_iter_state iter_state;
 	int rc, rc_all = 0;
 
@@ -949,7 +963,7 @@ ssize_t exmap_alloc_iter(struct exmap_ctx *ctx, struct exmap_interface *interfac
 		//	pr_info("exmap: BUG we currently support only iovectors of length 1\n");
 		//	return -EINVAL;
 		//}
-		// pr_info("iov: %lx + %ld (of %ld)\n", (uintptr_t)addr, size >> PAGE_SHIFT, iov_iter_count(iter));
+		pr_info("iov: %px + %ld (of %ld)\n", addr, size >> PAGE_SHIFT, iov_iter_count(iter));
 
 		if (ctx->exmap_vma->vm_start > (uintptr_t) addr) {
 			pr_info("vmstart");
@@ -1072,7 +1086,7 @@ static int exmap_init_module(void) {
 	if (cdev_add(&cdev, first, 1) == -1)
 		goto out_device_destroy;
 
-	printk(KERN_INFO "exmap registered");
+	pr_info("[exmap] registered");
 
 	return 0;
 
@@ -1091,7 +1105,7 @@ static void exmap_cleanup_module(void) {
 	device_destroy(cl, first);
 	class_destroy(cl);
 	unregister_chrdev_region(first, 1);
-	printk(KERN_INFO "exmap unregistered");
+	pr_info("[exmap] unregistered");
 }
 
 module_init(exmap_init_module)

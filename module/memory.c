@@ -497,8 +497,6 @@ void pmd_clear_bad(pmd_t *pmd)
 
 static struct page*
 unmap_page_fastpath(pte_t *pte) {
-	int err;
-	struct page* page;
 	pte_t ptent, new_ptent;
 
 	ptent = ptep_get(pte);
@@ -533,7 +531,7 @@ unmap_pages(struct vm_area_struct *vma, unsigned long addr, unsigned long num_pa
 	struct mm_struct *const mm = vma->vm_mm;
 	unsigned long remaining_pages_total = num_pages;
 	unsigned long pages_to_write_in_pmd;
-	int ret, err;
+	int ret;
 more:
 	ret = -EFAULT;
 	pmd = walk_to_pmd(mm, addr);
@@ -575,11 +573,10 @@ more:
 			if (pte_present(ptent)) {
 				unsigned long pfn = pte_pfn(ptent);
 				struct page *page = pfn_to_page(pfn);
-				unsigned int mapcount;
 
 				/* TODO maybe return EBUSY at some point */
 				if (PageUnevictable(page)) {
-					/* pr_info("page %p unevictable", page); */
+                    exmap_debug("page %p unevictable", page);
 					continue;
 				}
 
@@ -621,8 +618,6 @@ int exmap_unmap_pages( struct vm_area_struct *vma,
 					  struct exmap_pages_ctx *ctx)
 {
 	const unsigned long end = addr + (num_pages * PAGE_SIZE);
-	pgd_t *pgd;
-	unsigned long next;
 
 	if (addr < vma->vm_start || end > vma->vm_end)
 		return -EFAULT;
