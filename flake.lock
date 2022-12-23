@@ -306,26 +306,6 @@
         "type": "github"
       }
     },
-    "exmap": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1671740922,
-        "narHash": "sha256-7GVJL9G25YVg1Ziw0xcw+oQ/I5yjtLoz3oFZPeKaoOQ=",
-        "owner": "jordanisaacs",
-        "repo": "exmap-module",
-        "rev": "a2cf4d2eb109646ce5d5b1b21a071a90cac55342",
-        "type": "github"
-      },
-      "original": {
-        "owner": "jordanisaacs",
-        "repo": "exmap-module",
-        "type": "github"
-      }
-    },
     "flake-utils": {
       "locked": {
         "lastModified": 1667395993,
@@ -1657,7 +1637,6 @@
     "root": {
       "inputs": {
         "crate2nix": "crate2nix",
-        "exmap": "exmap",
         "kernelFlake": "kernelFlake",
         "neovim-flake": "neovim-flake_2",
         "nixpkgs": "nixpkgs_7",

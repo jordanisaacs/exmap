@@ -2,10 +2,6 @@
   inputs = {
     nixpkgs.url = "nixpkgs/nixpkgs-unstable";
     rust-overlay.url = "github:oxalica/rust-overlay";
-    exmap = {
-      url = "github:jordanisaacs/exmap-module";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     neovim-flake.url = "github:jordanisaacs/neovim-flake";
     crate2nix = {
       url = "github:kolloch/crate2nix";
@@ -22,7 +18,6 @@
     nixpkgs,
     rust-overlay,
     neovim-flake,
-    exmap,
     crate2nix,
     kernelFlake,
     ...
@@ -46,7 +41,6 @@
 
     kernelLib = kernelFlake.lib.builders {inherit pkgs;};
 
-    exmapMod = exmap.lib.buildExmap kernel;
     configfile = kernelLib.buildKernelConfig {
       inherit
         (kernelConfig)
@@ -72,7 +66,7 @@
 
     initramfs = kernelLib.buildInitramfs {
       inherit kernel;
-      modules = [exmapMod];
+      modules = [exmapModule];
       extraBin = {
         exmap = "${exmapExample}/bin/exmap";
       };
@@ -81,6 +75,23 @@
         mknod -m 666 /dev/exmap c 254 0
       '';
     };
+
+    buildExmapModule = kernel:
+      (kernelLib.buildCModule {inherit kernel;} {
+        name = "exmap";
+        src = ./module;
+      })
+      .overrideAttrs (old: {
+        outputs = ["out" "dev"];
+        installPhase =
+          old.installPhase
+          + ''
+            mkdir -p $dev/include
+            cp -r linux $dev/include
+          '';
+      });
+
+    exmapModule = buildExmapModule kernel;
 
     runQemu = kernelLib.buildQemuCmd {inherit kernel initramfs;};
 
@@ -167,7 +178,7 @@
             // {
               exmap = attrs: {
                 NIX_CFLAGS_COMPILE = compileFlags;
-                buildInputs = [pkgs.rustPlatform.bindgenHook exmapMod.dev];
+                buildInputs = [pkgs.rustPlatform.bindgenHook exmapModule.dev];
               };
             };
         };
@@ -196,11 +207,15 @@
       runQemu
     ];
 
-    compileFlags = "-I${pkgs.linuxPackages_latest.kernel.dev}/lib/modules/${pkgs.linuxPackages_latest.kernel.modDirVersion}/source/include";
+    compileFlags = "-I${kernel.dev}/lib/modules/${kernel.modDirVersion}/source/include";
   in
     with pkgs; {
+      lib = {
+        inherit buildExmapModule;
+      };
+
       packages.${system} = {
-        inherit exmapExample;
+        inherit exmapExample exmapModule;
       };
 
       devShells.${system}.default = mkShell {
