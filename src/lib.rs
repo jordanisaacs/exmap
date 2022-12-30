@@ -80,9 +80,9 @@ impl<'a, 'b> Interface<'a, 'b> {
     pub fn print(&self, index: usize) {
         println!("start address: {:p}", self.data);
         for i in 0..index {
-            let v = unsafe { self.data.anon1.iov[i] };
+            let v = unsafe { self.data.anon1.iov.index(i) };
             let o = unsafe { v.anon1.anon1 };
-            println!("address {:p}: {} {}", &o, o.page(), o.len());
+            println!("address {} {:p}: {} {}", i, v, o.page(), o.len());
         }
     }
 }
@@ -161,7 +161,7 @@ impl<const PAGE_SIZE: usize> OwnedExmapFd<PAGE_SIZE> {
         let data = self._mmap(Interface::SIZE, interface_num)? as *mut sys::exmap_user_interface;
 
         println!(
-            "mmap interface[{:#X}] at address {}",
+            "mmap interface[{:#X}] at address {:#X}",
             interface_num, data as usize
         );
 
@@ -223,6 +223,12 @@ impl<const PAGE_SIZE: usize> OwnedExmapFd<PAGE_SIZE> {
 
     fn as_fd(&self) -> BorrowedExmapFd<'_> {
         BorrowedExmapFd(self.0.as_fd())
+    }
+}
+
+impl<const PAGE_SIZE: usize> Drop for OwnedExmapFd<PAGE_SIZE> {
+    fn drop(&mut self) {
+        println!("Dropping file descriptor");
     }
 }
 

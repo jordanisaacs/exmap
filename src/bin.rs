@@ -26,7 +26,7 @@ fn main() {
 
     interface.print(10);
 
-    println!("{}", interface.alloc(0).unwrap());
-    println!("{}", interface.alloc(10).unwrap());
-    println!("{}", interface.alloc(10).unwrap());
+    // println!("{}", interface.alloc(0).unwrap());
+    // println!("{}", interface.alloc(10).unwrap());
+    // println!("{}", interface.alloc(10).unwrap());
 }

@@ -35,7 +35,12 @@ in {
       DEBUG_ATOMIC_SLEEP = yes;
 
       DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT = yes;
+      DEBUG_INFO_REDUCED = no;
       GDB_SCRIPTS = yes;
+      FRAME_POINTER = yes;
+
+      KPROBES = yes;
+      KALLSYMS_ALL = yes;
 
       IKCONFIG = yes;
       IKCONFIG_PROC = yes;
@@ -44,7 +49,14 @@ in {
 
       SLUB_DEBUG = yes;
       DEBUG_MEMORY_INIT = yes;
+
+      # KASAN debugging
       KASAN = yes;
+      KASAN_GENERIC = yes;
+
+      # Undefined behavior debugging
+      UBSAN = yes;
+      UBSAN_SANITIZE_ALL = yes;
 
       # FRAME_WARN - warn at build time for stack frames larger tahn this.
 
@@ -60,10 +72,8 @@ in {
       IRQSOFF_TRACER = yes;
 
       KGDB = yes;
-      UBSAN = yes;
       BUG_ON_DATA_CORRUPTION = yes;
       SCHED_STACK_END_CHECK = yes;
-      FRAME_POINTER = yes;
       UNWINDER_FRAME_POINTER = yes;
       "64BIT" = yes;
 
@@ -95,9 +105,6 @@ in {
       # insmod/rmmod modules
       MODULES = yes;
       MODULE_UNLOAD = yes;
-
-      KPROBES = yes;
-      KALLSYMS_ALL = yes;
     };
 
     # Flags that get passed to generate-config.pl

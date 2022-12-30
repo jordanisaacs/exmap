@@ -455,11 +455,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1671789731,
-        "narHash": "sha256-+jOv9Q0IuBtciDpyaQZpYFyODkMdk0z3BRHHDiPkjp8=",
+        "lastModified": 1672410366,
+        "narHash": "sha256-6mgnZGBqLuYqJFnOGa48B4sEdwbqFGD1tkmwHHHzsr4=",
         "owner": "jordanisaacs",
         "repo": "kernel-module-flake",
-        "rev": "9bc7e5ba15e8d0bcc1800a4a35ece3d7e66067a5",
+        "rev": "73443fdd0e6ba72c11c199f559029820bdbe13dd",
         "type": "github"
       },
       "original": {

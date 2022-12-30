@@ -36,7 +36,9 @@
       inherit system overlays;
     };
 
-    linuxConfigs = pkgs.callPackage ./config.nix {};
+    enableGdb = true;
+
+    linuxConfigs = pkgs.callPackage ./configs/kernel.nix {};
     inherit (linuxConfigs) kernelArgs kernelConfig;
 
     kernelLib = kernelFlake.lib.builders {inherit pkgs;};
@@ -44,7 +46,6 @@
     configfile = kernelLib.buildKernelConfig {
       inherit
         (kernelConfig)
-        kernelConfig
         generateConfigFlags
         structuredExtraConfig
         ;
@@ -58,15 +59,16 @@
         modDirVersion
         version
         ;
-      inherit configfile nixpkgs;
+
+      inherit configfile nixpkgs enableGdb;
     };
 
     linuxDev = pkgs.linuxPackagesFor kernelDrv;
     kernel = linuxDev.kernel;
 
+    modules = [exmapModule];
     initramfs = kernelLib.buildInitramfs {
-      inherit kernel;
-      modules = [exmapModule];
+      inherit kernel modules;
       extraBin = {
         exmap = "${exmapExample}/bin/exmap";
       };
@@ -93,81 +95,12 @@
 
     exmapModule = buildExmapModule kernel;
 
-    runQemu = kernelLib.buildQemuCmd {inherit kernel initramfs;};
+    runQemu = kernelLib.buildQemuCmd {inherit kernel initramfs enableGdb;};
+    runGdb = kernelLib.buildGdbCmd {inherit kernel modules;};
 
     neovim = neovim-flake.lib.neovimConfiguration {
       inherit pkgs;
-      modules = [
-        {
-          config = {
-            vim.lsp = {
-              enable = true;
-              lightbulb.enable = true;
-              lspSignature.enable = true;
-              trouble.enable = true;
-              nvimCodeActionMenu.enable = true;
-              formatOnSave = true;
-              rust = {
-                enable = true;
-                rustAnalyzerOpts = "";
-              };
-              nix.enable = true;
-            };
-            vim.statusline.lualine = {
-              enable = true;
-              theme = "onedark";
-            };
-            vim.visuals = {
-              enable = true;
-              nvimWebDevicons.enable = true;
-              lspkind.enable = true;
-              indentBlankline = {
-                enable = true;
-                fillChar = "";
-                eolChar = "";
-                showCurrContext = true;
-              };
-              cursorWordline = {
-                enable = true;
-                lineTimeout = 0;
-              };
-            };
-
-            vim.theme = {
-              enable = true;
-              name = "onedark";
-              style = "darker";
-            };
-            vim.autopairs.enable = true;
-            vim.autocomplete = {
-              enable = true;
-              type = "nvim-cmp";
-            };
-            vim.filetree.nvimTreeLua.enable = true;
-            vim.tabline.nvimBufferline.enable = true;
-            vim.telescope = {
-              enable = true;
-            };
-            vim.markdown = {
-              enable = true;
-              glow.enable = true;
-            };
-            vim.treesitter = {
-              enable = true;
-              autotagHtml = true;
-              context.enable = true;
-            };
-            vim.keys = {
-              enable = true;
-              whichKey.enable = true;
-            };
-            vim.git = {
-              enable = true;
-              gitsigns.enable = true;
-            };
-          };
-        }
-      ];
+      modules = [./configs/editor.nix];
     };
 
     exmapExample = let
@@ -202,9 +135,11 @@
       cargo-audit
       cargo-tarpaulin
       clippy
-      gdb
+
+      bear
 
       runQemu
+      runGdb
     ];
 
     compileFlags = "-I${kernel.dev}/lib/modules/${kernel.modDirVersion}/source/include";
@@ -220,6 +155,8 @@
 
       devShells.${system}.default = mkShell {
         NIX_CFLAGS_COMPILE = compileFlags;
+        KERNEL = kernel.dev;
+        KERNEL_VERSION = kernel.modDirVersion;
         nativeBuildInputs =
           nativeBuildInputs
           ++ [neovim.neovim];

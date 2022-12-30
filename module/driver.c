@@ -294,6 +294,7 @@ static void vm_close(struct vm_area_struct *vma) {
 	// Raise the locked_vm_pages again
 	// exmap_unaccount_mem(ctx, ctx->buffer_size);
 
+    ctx->exmap_vma = NULL;
 	pr_info("vm_close:  freed: %lu, unlock=%lu\n",
 			freed_pages, unlocked_pages);
 }
@@ -345,9 +346,11 @@ static inline struct exmap_ctx *mmu_notifier_to_exmap(struct mmu_notifier *mn)
 static void exmap_notifier_release(struct mmu_notifier *mn,
 								   struct mm_struct *mm) {
 	int rc, unmapped_pages;
+    pr_info("[exmap] notifier release");
 	struct exmap_ctx *ctx = mmu_notifier_to_exmap(mn);
 
 	if (ctx->interfaces && ctx->exmap_vma) {
+        pr_info("[exmap] notifier unmap");
 		struct vm_area_struct *vma = ctx->exmap_vma;
 		unsigned long pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
 
@@ -361,7 +364,7 @@ static void exmap_notifier_release(struct mmu_notifier *mn,
 
 		unmapped_pages = pages_ctx.pages_count;
 
-		printk("notifier_release: purged %d pages\n", unmapped_pages);
+		pr_info("[exmap] notifier_release: purged %d pages addr %lu\n", unmapped_pages, pages);
 	}
 }
 
@@ -373,6 +376,11 @@ static int exmap_mmu_notifier(struct exmap_ctx *ctx)
 {
 	ctx->mmu_notifier.ops = &mn_opts;
 	return mmu_notifier_register(&ctx->mmu_notifier, current->mm);
+}
+
+static void exmap_mmu_notifier_unregister(struct exmap_ctx *ctx)
+{
+    mmu_notifier_unregister(&ctx->mmu_notifier, current->mm);
 }
 
 static int exmap_mmap(struct file *file, struct vm_area_struct *vma) {
@@ -513,11 +521,14 @@ static int release(struct inode *inode, struct file *filp) {
 		kvfree(ctx->interfaces);
 	}
 
-	pr_info("release\n");
+    exmap_mmu_notifier_unregister(ctx);
+	pr_info("[exmap] unregistered mmu notiifer\n");
 
+	pr_info("[exmap] released interfaces\n");
 
 	kfree(ctx);
 	filp->private_data = NULL;
+	pr_info("[exmap] released context\n");
 	return 0;
 }
 
@@ -1101,6 +1112,7 @@ static int exmap_init_module(void) {
 }
 
 static void exmap_cleanup_module(void) {
+    pr_info("[exmap] starting unregister");
 	cdev_del(&cdev);
 	device_destroy(cl, first);
 	class_destroy(cl);
