@@ -31,18 +31,18 @@ pub enum InterfaceIndexError {
     OutOfBounds,
 }
 
-pub struct Interface<'a, 'b> {
-    data: &'a mut sys::exmap_user_interface,
+pub struct Interface<'b> {
+    data: *mut sys::exmap_user_interface,
     index: u16,
     exmap_fd: BorrowedExmapFd<'b>,
 }
 
-impl<'a, 'b> Interface<'a, 'b> {
+impl<'b> Interface<'b> {
     pub const COUNT: usize = sys::EXMAP_USER_INTERFACE_PAGES as usize;
-    const SIZE: usize = std::mem::size_of::<Self>() as usize;
+    const SIZE: usize = std::mem::size_of::<sys::exmap_user_interface>() as usize;
 
     pub fn get_mut(&mut self, index: usize) -> Result<InterfaceIovMut<'_>, InterfaceIndexError> {
-        let Some(iov_union) = (unsafe { self.data.anon1.iov.get_mut(index) })
+        let Some(iov_union) = (unsafe { (*self.data).anon1.iov.get_mut(index) })
          else {
              return Err(InterfaceIndexError::OutOfBounds);
          };
@@ -52,7 +52,7 @@ impl<'a, 'b> Interface<'a, 'b> {
     }
 
     pub fn get(&self, index: usize) -> Result<InterfaceIov<'_>, InterfaceIndexError> {
-        let Some(iov_union) = (unsafe { self.data.anon1.iov.get(index) })
+        let Some(iov_union) = (unsafe { (*self.data).anon1.iov.get(index) })
          else {
              return Err(InterfaceIndexError::OutOfBounds);
          };
@@ -66,13 +66,13 @@ impl<'a, 'b> Interface<'a, 'b> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = InterfaceIov<'_>> {
-        unsafe { &self.data.anon1.iov }
+        unsafe { &(*self.data).anon1.iov }
             .iter()
             .map(|iov| InterfaceIov(unsafe { &iov.anon1.anon1 }))
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = InterfaceIovMut<'_>> {
-        unsafe { &mut self.data.anon1.iov }
+        unsafe { &mut (*self.data).anon1.iov }
             .iter_mut()
             .map(|iov| InterfaceIovMut(unsafe { &mut iov.anon1.anon1 }))
     }
@@ -80,17 +80,17 @@ impl<'a, 'b> Interface<'a, 'b> {
     pub fn print(&self, index: usize) {
         println!("start address: {:p}", self.data);
         for i in 0..index {
-            let v = unsafe { self.data.anon1.iov.index(i) };
-            let o = unsafe { v.anon1.anon1 };
+            let v = unsafe { (*self.data).anon1.iov.as_ref().index(i) };
+            let o = unsafe { &v.anon1.anon1 };
             println!("address {} {:p}: {} {}", i, v, o.page(), o.len());
         }
     }
 }
 
-impl<'a, 'b> Drop for Interface<'a, 'b> {
+impl<'b> Drop for Interface<'b> {
     fn drop(&mut self) {
         println!("drop interface[{}] at {:p}", self.index, self.data);
-        unsafe { mm::munmap(self.data as *mut _ as *mut _, Self::SIZE) }.unwrap();
+        unsafe { mm::munmap(self.data as *mut _, Self::SIZE) }.unwrap();
     }
 }
 
@@ -156,17 +156,17 @@ impl<const PAGE_SIZE: usize> OwnedExmapFd<PAGE_SIZE> {
         Ok(VMMap { data, len: size })
     }
 
-    pub fn mmap_interface<'a>(&self, index: u16) -> io::Result<Interface<'a, '_>> {
+    pub fn mmap_interface(&self, index: u16) -> io::Result<Interface<'_>> {
         let interface_num = EXMAP_OFF_INTERFACE(index.into()) as u64;
         let data = self._mmap(Interface::SIZE, interface_num)? as *mut sys::exmap_user_interface;
 
         println!(
-            "mmap interface[{:#X}] at address {:#X}",
+            "mmap interface[{}] at address {:#X}",
             interface_num, data as usize
         );
 
         Ok(Interface {
-            data: unsafe { &mut *data },
+            data,
             exmap_fd: self.as_fd(),
             index,
         })
