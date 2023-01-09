@@ -82,6 +82,7 @@
       (kernelLib.buildCModule {inherit kernel;} {
         name = "exmap";
         src = ./module;
+        dontStrip = true;
       })
       .overrideAttrs (old: {
         outputs = ["out" "dev"];
@@ -129,6 +130,7 @@
       rustPlatform.bindgenHook
 
       pkgs.crate2nix
+      exmapModule
 
       cargo
       cargo-edit
