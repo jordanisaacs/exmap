@@ -144,7 +144,7 @@ impl<const PAGE_SIZE: usize> OwnedExmapFd<PAGE_SIZE> {
     #[inline]
     fn _mmap(&self, length: usize, offset: u64) -> io::Result<*mut c_void> {
         let prot: ProtFlags = ProtFlags::READ | ProtFlags::WRITE;
-        let flags: MapFlags = MapFlags::PRIVATE;
+        let flags: MapFlags = MapFlags::SHARED;
 
         // SAFETY:
         // Passing null pointer so do not need to deal with alignment
