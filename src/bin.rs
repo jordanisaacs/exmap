@@ -23,8 +23,10 @@ fn main() {
         v.set_page(i as u64);
         v.set_len(1);
     }
+    interface.print(5);
 
-    interface.print(10);
+    interface.alloc(5);
+
 
     // println!("{}", interface.alloc(0).unwrap());
     // println!("{}", interface.alloc(10).unwrap());
