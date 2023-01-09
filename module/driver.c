@@ -328,7 +328,7 @@ static vm_fault_t vm_fault(struct vm_fault *vmf) {
 /* After mmap. TODO vs mmap, when can this happen at a different time than mmap? */
 static void vm_open(struct vm_area_struct *vma)
 {
-	pr_info("vm_open\n");
+	pr_info("[exmap]: vm_open\n");
 }
 
 static struct vm_operations_struct vm_ops =
@@ -413,10 +413,16 @@ static int exmap_mmap(struct file *file, struct vm_area_struct *vma) {
 
 		interface = (&ctx->interfaces[idx]);
 		exmap_debug("mmap interface[%d]: 0x%px size=%zu\n", idx, interface->usermem, sz);
+        exmap_debug("mmap address: 0x%lx", vma->vm_start);
 
-
+        // https://linux-kernel-labs.github.io/refs/heads/master/labs/memory_mapping.html
 		// Map the struct exmap_user_interface into the userspace
+
+        // virt_to_pys converts the kernel address to a physical address
+        // Then shifts by page to generate a page frame number (PFN)
 		pfn = virt_to_phys(interface->usermem) >> PAGE_SHIFT;
+
+        // Maps a contigious physical address space into the virtual space represented by vm_area_struct
 		return remap_pfn_range(vma, vma->vm_start, pfn, sz, vma->vm_page_prot);
 	} else {
 		return -EINVAL;
@@ -655,7 +661,7 @@ exmap_alloc(struct exmap_ctx *ctx, struct exmap_action_params *params) {
 				ctx->alloc_count, ctx->buffer_size, ctx->contig_counter, ctx->contig_size);
 			break;
 		}
-		/* pr_info("exmap_alloc: push %lx on %d", page, iface); */
+		exmap_debug("[exmap]: exmap_alloc: push %lx on %d", page, iface);
 		push_page(page, &interface->local_pages, ctx);
 		num_pages--;
 	}
@@ -692,7 +698,7 @@ exmap_alloc(struct exmap_ctx *ctx, struct exmap_action_params *params) {
 		ret.pages = (int)(free_pages_before - pages_ctx.pages_count);
 		nr_pages_alloced += ret.pages;
 
-		exmap_debug("alloc: %llu+%d => rc=%d, used=%d",
+		exmap_debug("[exmap]: alloc[%d]: %llu+%d => rc=%d, used=%d", iface,
 					(uint64_t) vec.page, (int)vec.len,
 					(int)ret.res, (int) ret.pages);
 

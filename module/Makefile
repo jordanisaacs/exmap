@@ -5,7 +5,7 @@ KDIR = $(KERNEL)/lib/modules/$(KERNEL_VERSION)/build
 
 obj-m = exmap.o
 exmap-m = driver.o memory.o ksyms.o
-ccflags-y += -g 
+ccflags-y += -g -DDEBUG
 
 kbuild = -C $(KDIR) M=$$PWD $@
 
