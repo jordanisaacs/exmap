@@ -398,7 +398,9 @@ static int exmap_mmu_notifier(struct exmap_ctx *ctx)
 
 static void exmap_mmu_notifier_unregister(struct exmap_ctx *ctx)
 {
-    mmu_notifier_unregister(&ctx->mmu_notifier, current->mm);
+    if (current->mm) {
+        mmu_notifier_unregister(&ctx->mmu_notifier, current->mm);
+    }
 }
 
 static int exmap_mmap(struct file *file, struct vm_area_struct *vma) {
