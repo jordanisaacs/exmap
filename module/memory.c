@@ -604,8 +604,11 @@ more:
 			pte = pte_offset_map(pmd, addr);
 			page = unmap_page_fastpath(pte);
 
-			push_page(page, &ctx->interface->local_pages, ctx->ctx);
-			ctx->pages_count++;
+            if (page) {
+                exmap_debug("unmap fastpath: %lx", addr);
+                push_page(page, &ctx->interface->local_pages, ctx->ctx);
+                ctx->pages_count++;
+            }
 
 			remaining_pages_total -=1;
 			addr += PAGE_SIZE;
