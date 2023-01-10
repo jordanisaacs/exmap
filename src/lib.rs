@@ -1,6 +1,12 @@
 mod sys;
 
-use std::{ffi::c_void, ops::Index, ptr, slice::Iter};
+use std::{
+    ffi::c_void,
+    marker::PhantomData,
+    ops::{Index, IndexMut},
+    ptr,
+    slice::{Iter, IterMut},
+};
 
 use rustix::{
     fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd},
@@ -16,12 +22,147 @@ pub struct VMMap {
     len: usize,
 }
 
-impl VMMap {}
+impl VMMap {
+    pub fn unmap(self) {
+        println!("unmap vmmap");
+        unsafe { mm::munmap(self.data.cast(), self.len) }.unwrap();
+    }
+}
 
 impl Drop for VMMap {
     fn drop(&mut self) {
-        println!("unmap vmmap");
-        unsafe { mm::munmap(self.data.cast(), self.len) }.unwrap();
+    }
+}
+
+pub struct InterfaceIov;
+pub struct InterfaceResult;
+
+pub struct InterfaceWrapper<'a, T> {
+    index: u16,
+    data: *mut sys::exmap_user_interface,
+    len: u16,
+    exmap_fd: BorrowedExmapFd<'a>,
+    state: PhantomData<T>,
+}
+
+    const MMAP_INTERFACE: usize = std::mem::size_of::<sys::exmap_user_interface>() as usize;
+
+impl<'a, T> InterfaceWrapper<'a, T> {
+    pub const MAX_COUNT: usize = sys::EXMAP_USER_INTERFACE_PAGES as usize;
+
+    pub fn unmap(self) -> io::Result<()> {
+        println!("drop interface[{}] at {:p}", self.index, self.data);
+        unsafe { mm::munmap(self.data as *mut _, MMAP_INTERFACE) }
+    }
+}
+
+impl<'a> InterfaceWrapper<'a, InterfaceResult> {
+    pub fn into_iov(self) -> InterfaceWrapper<'a, InterfaceIov> {
+        let InterfaceWrapper {
+            index,
+            data,
+            exmap_fd,
+            ..
+        } = self;
+
+        InterfaceWrapper {
+            index,
+            data,
+            exmap_fd,
+            len: 0,
+            state: PhantomData,
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &sys::exmap_iov__bindgen_ty_1__bindgen_ty_2> {
+        unsafe { &(*self.data).anon1.iov }
+            .iter()
+            .take(self.len.into())
+            .map(|v| unsafe { &v.anon1.anon2 })
+    }
+}
+
+impl<'a> InterfaceWrapper<'a, InterfaceIov> {
+
+    pub fn alloc(self) -> (InterfaceWrapper<'a, InterfaceResult>, u16) {
+        // Result is stored in the memory map
+        let res = self.exmap_fd.alloc(self.index, self.len).unwrap();
+
+        (unsafe { self.into_res() }, res)
+    }
+
+    pub fn free(self) -> (InterfaceWrapper<'a, InterfaceResult>, u16) {
+        // Result is stored in the memory map
+        let res = self.exmap_fd.free(self.index, self.len).unwrap();
+
+        (unsafe { self.into_res() }, res)
+    }
+
+    unsafe fn into_res(self) -> InterfaceWrapper<'a, InterfaceResult> {
+        let InterfaceWrapper {
+            index,
+            data,
+            len,
+            exmap_fd,
+            ..
+        } = self;
+
+        InterfaceWrapper {
+            index,
+            data,
+            exmap_fd,
+            len,
+            state: PhantomData,
+        }
+    }
+
+    pub fn push(&mut self, page: u64, len: u64) -> Result<(), ()> {
+        if Self::MAX_COUNT == self.len.into() {
+            return Err(());
+        }
+
+        let l = self.len;
+        self.len += 1;
+        let x = &mut self[l];
+        x.set_len(len);
+        x.set_page(page);
+        Ok(())
+    }
+
+    pub fn iter(&mut self) -> impl Iterator<Item = &sys::ExmapIov> {
+        unsafe { &(*self.data).anon1.iov }
+            .iter()
+            .take(self.len.into())
+            .map(|v| unsafe { &v.anon1.anon1 })
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut sys::ExmapIov> {
+        unsafe { &mut (*self.data).anon1.iov }
+            .iter_mut()
+            .take(self.len.into())
+            .map(|v| unsafe { &mut v.anon1.anon1 })
+    }
+}
+
+impl<'a, 'b> Index<u16> for InterfaceWrapper<'b, InterfaceIov> {
+    type Output = sys::ExmapIov;
+
+    fn index(&self, index: u16) -> &Self::Output {
+        if index >= self.len.into() {
+            panic!("out of bounds")
+        }
+
+        unsafe { &(*self.data).anon1.iov[usize::from(index)].anon1.anon1 }
+    }
+}
+
+impl<'b> IndexMut<u16> for InterfaceWrapper<'b, InterfaceIov> {
+    fn index_mut(&mut self, index: u16) -> &mut Self::Output {
+        if index >= self.len.into() {
+            panic!("out of bounds")
+        }
+
+        unsafe { &mut (*self.data).anon1.iov[usize::from(index)].anon1.anon1 }
     }
 }
 
@@ -29,107 +170,6 @@ impl Drop for VMMap {
 pub enum InterfaceIndexError {
     #[error("index is out of bounds")]
     OutOfBounds,
-}
-
-pub struct Interface<'b> {
-    data: *mut sys::exmap_user_interface,
-    index: u16,
-    exmap_fd: BorrowedExmapFd<'b>,
-}
-
-impl<'b> Interface<'b> {
-    pub const COUNT: usize = sys::EXMAP_USER_INTERFACE_PAGES as usize;
-    const SIZE: usize = std::mem::size_of::<sys::exmap_user_interface>() as usize;
-
-    pub fn get_mut(&mut self, index: usize) -> Result<InterfaceIovMut<'_>, InterfaceIndexError> {
-        let Some(iov_union) = (unsafe { (*self.data).anon1.iov.get_mut(index) })
-         else {
-             return Err(InterfaceIndexError::OutOfBounds);
-         };
-
-        let iov = unsafe { &mut iov_union.anon1.anon1 };
-        Ok(InterfaceIovMut(iov))
-    }
-
-    pub fn get(&self, index: usize) -> Result<InterfaceIov<'_>, InterfaceIndexError> {
-        let Some(iov_union) = (unsafe { (*self.data).anon1.iov.get(index) })
-         else {
-             return Err(InterfaceIndexError::OutOfBounds);
-         };
-
-        let iov = unsafe { &iov_union.anon1.anon1 };
-        Ok(InterfaceIov(iov))
-    }
-
-    pub fn alloc(&self, iov_len: u16) -> io::Result<u16> {
-        self.exmap_fd.alloc(self.index, iov_len)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = InterfaceIov<'_>> {
-        unsafe { &(*self.data).anon1.iov }
-            .iter()
-            .map(|iov| InterfaceIov(unsafe { &iov.anon1.anon1 }))
-    }
-
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = InterfaceIovMut<'_>> {
-        unsafe { &mut (*self.data).anon1.iov }
-            .iter_mut()
-            .map(|iov| InterfaceIovMut(unsafe { &mut iov.anon1.anon1 }))
-    }
-
-    pub fn print(&self, index: usize) {
-        println!("start address: {:p}", self.data);
-        for i in 0..index {
-            let v = unsafe { (*self.data).anon1.iov.as_ref().index(i) };
-            let o = unsafe { &v.anon1.anon1 };
-            println!("address {} {:p}: {} {}", i, v, o.page(), o.len());
-        }
-    }
-}
-
-impl<'b> Drop for Interface<'b> {
-    fn drop(&mut self) {
-        println!("drop interface[{}] at {:p}", self.index, self.data);
-        unsafe { mm::munmap(self.data as *mut _, Self::SIZE) }.unwrap();
-    }
-}
-
-pub struct Iovec {}
-
-pub struct InterfaceIovMut<'a>(&'a mut sys::ExmapIov);
-impl<'a> InterfaceIovMut<'a> {
-    /// Set the starting page of the iov.
-    ///
-    /// The address is within the exmap's address space and should be aligned to page size
-    pub fn set_page(&mut self, val: u64) {
-        self.0.set_page(val);
-    }
-
-    /// Set the length in page of the iov
-    pub fn set_len(&mut self, val: u64) {
-        self.0.set_len(val);
-    }
-
-    /// Get the starting address of the iov
-    pub fn page(&self) -> u64 {
-        self.0.page()
-    }
-
-    /// Set the lenght of the iov in terms of pages
-    pub fn len(&self) -> u64 {
-        self.0.len()
-    }
-}
-
-pub struct InterfaceIov<'a>(&'a sys::ExmapIov);
-impl<'a> InterfaceIov<'a> {
-    pub fn page(&self) -> u64 {
-        self.0.page()
-    }
-
-    pub fn len(&self) -> u64 {
-        self.0.len()
-    }
 }
 
 #[derive(Debug)]
@@ -156,19 +196,26 @@ impl<const PAGE_SIZE: usize> OwnedExmapFd<PAGE_SIZE> {
         Ok(VMMap { data, len: size })
     }
 
-    pub fn mmap_interface(&self, index: u16) -> io::Result<Interface<'_>> {
+    /// Safety: Can only map an interface value once.
+    pub unsafe fn mmap_interface(
+        &self,
+        index: u16,
+    ) -> io::Result<InterfaceWrapper<'_, InterfaceIov>> {
         let interface_num = EXMAP_OFF_INTERFACE(index.into()) as u64;
-        let data = self._mmap(Interface::SIZE, interface_num)? as *mut sys::exmap_user_interface;
+        let data = self._mmap(MMAP_INTERFACE, interface_num)?
+            as *mut sys::exmap_user_interface;
 
         println!(
             "mmap interface[{}] at address {:#X}",
             interface_num, data as usize
         );
 
-        Ok(Interface {
+        Ok(InterfaceWrapper {
             data,
+            len: 0,
             exmap_fd: self.as_fd(),
             index,
+            state: PhantomData,
         })
     }
 
@@ -206,7 +253,7 @@ impl<const PAGE_SIZE: usize> OwnedExmapFd<PAGE_SIZE> {
         buffer_size: usize,
         backing_fd: Option<BorrowedFd<'b>>,
     ) -> io::Result<VirtMem<'a, 'b, PAGE_SIZE>> {
-        assert!(Interface::SIZE <= PAGE_SIZE);
+        assert!(MMAP_INTERFACE <= PAGE_SIZE);
 
         // Initialize the exmap vma with its size
         let vmmap = self.mmap_vm(exmap_size)?;
@@ -252,6 +299,17 @@ impl<'a> BorrowedExmapFd<'a> {
 
         unsafe { sys::exmap_ioctl(&self.0, &params).map(|c| c as u16) }
     }
+
+    fn free(&self, interface: u16, iov_len: u16) -> io::Result<u16> {
+        let params = sys::exmap_action_params {
+            interface,
+            iov_len,
+            opcode: sys::EXMAP_OP_FREE as u16,
+            flags: 0, // TODO: Figure out flag situation
+        };
+
+        unsafe { sys::exmap_ioctl(&self.0, &params).map(|c| c as u16) }
+    }
 }
 
 pub struct VirtMem<'a, 'b, const PAGE_SIZE: usize> {
@@ -267,6 +325,10 @@ impl<'a, 'b, const P: usize> VirtMem<'a, 'b, P> {
 
     pub fn readv() {
         todo!()
+    }
+
+    pub fn unmap(self) {
+        self.vmmap.unmap();
     }
 }
 
@@ -296,23 +358,5 @@ mod tests {
                 None,
             )
             .unwrap();
-
-        let mut interface = exmap_fd.mmap_interface(0).unwrap();
-        for (i, mut v) in interface.iter_mut().enumerate() {
-            v.set_page(i as u64);
-            v.set_len(1);
-        }
-
-        println!("{}", interface.alloc(0).unwrap());
-        println!("{}", interface.alloc(10).unwrap());
-        println!("{}", interface.alloc(10).unwrap());
-
-        // Allocate interfaces
-        // let mut interfaces = Vec::with_capacity(threads as usize);
-        // for i in 0..Interface::SIZE {
-        //     let mut iov = interfaces[0].index_mut(i);
-        //     iov.set_page(i as u64);
-        //     iov.set_len(1);
-        // }
     }
 }
