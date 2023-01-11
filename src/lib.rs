@@ -27,7 +27,7 @@ pub struct InterfaceWrapper<'a, T> {
     state: PhantomData<T>,
 }
 
-    const MMAP_INTERFACE: usize = std::mem::size_of::<sys::exmap_user_interface>() as usize;
+const MMAP_INTERFACE: usize = std::mem::size_of::<sys::exmap_user_interface>() as usize;
 
 impl<'a, T> InterfaceWrapper<'a, T> {
     pub const MAX_COUNT: usize = sys::EXMAP_USER_INTERFACE_PAGES as usize;
@@ -35,6 +35,10 @@ impl<'a, T> InterfaceWrapper<'a, T> {
     pub fn unmap(self) -> io::Result<()> {
         println!("drop interface[{}] at {:p}", self.index, self.data);
         unsafe { mm::munmap(self.data as *mut _, MMAP_INTERFACE) }
+    }
+
+    pub fn len(&self) -> u16 {
+        self.len
     }
 }
 
@@ -65,7 +69,6 @@ impl<'a> InterfaceWrapper<'a, InterfaceResult> {
 }
 
 impl<'a> InterfaceWrapper<'a, InterfaceIov> {
-
     pub fn alloc(self) -> (InterfaceWrapper<'a, InterfaceResult>, u16) {
         // Result is stored in the memory map
         let res = self.exmap_fd.alloc(self.index, self.len).unwrap();
@@ -183,8 +186,7 @@ impl<const PAGE_SIZE: usize> OwnedExmapFd<PAGE_SIZE> {
         index: u16,
     ) -> io::Result<InterfaceWrapper<'_, InterfaceIov>> {
         let interface_num = EXMAP_OFF_INTERFACE(index.into()) as u64;
-        let data = self._mmap(MMAP_INTERFACE, interface_num)?
-            as *mut sys::exmap_user_interface;
+        let data = self._mmap(MMAP_INTERFACE, interface_num)? as *mut sys::exmap_user_interface;
 
         println!(
             "mmap interface[{}] at address {:#X}",
@@ -342,7 +344,6 @@ impl<'a, 'b, const P: usize> AsMut<[u8]> for VirtMem<'a, 'b, P> {
         unsafe { std::slice::from_raw_parts_mut(self.as_mut_ptr(), self.size()) }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
