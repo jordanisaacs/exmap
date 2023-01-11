@@ -418,6 +418,7 @@ static int exmap_mmap(struct file *file, struct vm_area_struct *vma) {
 		ctx->exmap_vma = vma;
 		vma->vm_ops   = &vm_ops;
 		vma->vm_flags |= VM_DONTEXPAND | VM_DONTDUMP | VM_NOHUGEPAGE | VM_DONTCOPY;
+        // VM_MIXEDMAP: http://visa.lab.asu.edu/gitlab/fstrace/android-kernel-msm-hammerhead-3.4-marshmallow-mr3/commit/b379d790197cdf8a95fb67507d75a24ac0a1678d
 		vma->vm_flags |= VM_MIXEDMAP; // required for vm_insert_page
 		vma->vm_private_data = ctx;
 		vm_open(vma);
@@ -775,8 +776,7 @@ exmap_free(struct exmap_ctx *ctx, struct exmap_action_params *params) {
 		rc = exmap_unmap_pages(vma, uaddr, (int) vec.len, &pages_ctx);
 
 		exmap_debug("free[%d]: off=%llu, len=%d, freed: %lu",
-				iface,
-					(uint64_t) vec.page, (int) vec.len,
+                    iface, (uint64_t) vec.page, (int) vec.len,
 					pages_ctx.pages_count - old_free_count);
 
 		if (rc < 0) failed++;

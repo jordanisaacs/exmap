@@ -242,24 +242,22 @@ static pmd_t *walk_to_pmd(struct mm_struct *mm, unsigned long addr)
 	pmd_t *pmd;
 
 	pgd = pgd_offset(mm, addr);
-	// pr_info("pgd: %p", pgd);
+	exmap_debug("pgd: %px", pgd);
 
 	p4d = exmap_p4d_offset_alloc(mm, pgd, addr);
 	if (!p4d)
 		return NULL;
-	// pr_info("p4d: %p", pgd);
+	exmap_debug("p4d: %px", p4d);
 
 	pud = exmap_pud_offset_alloc(mm, p4d, addr);
 	if (!pud)
 		return NULL;
-
-	// pr_info("pud: %p", pud);
+	exmap_debug("pud: %px", pud);
 
 	pmd = exmap_pmd_offset_alloc(mm, pud, addr);
 	if (!pmd)
 		return NULL;
-
-	// pr_info("pmd: %p", pmd);
+	exmap_debug("pmd: %px", pmd);
 
 	VM_BUG_ON(pmd_trans_huge(*pmd));
 	return pmd;
@@ -620,6 +618,7 @@ more:
 		for (pte = start_pte; pte_idx < batch_size; ++pte, ++pte_idx) {
 			pte_t ptent = ptep_get_and_clear(mm, addr, pte);
 			if (pte_present(ptent)) {
+                exmap_debug("unmapped batch: %lx", addr);
 				unsigned long pfn = pte_pfn(ptent);
 				struct page *page = pfn_to_page(pfn);
 
