@@ -5,7 +5,6 @@ use std::{
     marker::PhantomData,
     ops::{Index, IndexMut},
     ptr,
-    slice::{Iter, IterMut},
 };
 
 use rustix::{
@@ -16,23 +15,6 @@ use rustix::{
 };
 use sys::EXMAP_OFF_INTERFACE;
 use thiserror::Error;
-
-pub struct VMMap {
-    data: *mut u8,
-    len: usize,
-}
-
-impl VMMap {
-    pub fn unmap(self) {
-        println!("unmap vmmap");
-        unsafe { mm::munmap(self.data.cast(), self.len) }.unwrap();
-    }
-}
-
-impl Drop for VMMap {
-    fn drop(&mut self) {
-    }
-}
 
 pub struct InterfaceIov;
 pub struct InterfaceResult;
@@ -191,9 +173,8 @@ impl<const PAGE_SIZE: usize> OwnedExmapFd<PAGE_SIZE> {
         unsafe { mm::mmap(ptr::null_mut(), length, prot, flags, &self.0, offset) }
     }
 
-    fn mmap_vm(&self, size: usize) -> io::Result<VMMap> {
-        let data = self._mmap(size, sys::EXMAP_OFF_EXMAP.into())? as *mut u8;
-        Ok(VMMap { data, len: size })
+    fn mmap_vm(&self, size: usize) -> io::Result<*mut u8> {
+        Ok(self._mmap(size, sys::EXMAP_OFF_EXMAP.into())? as *mut u8)
     }
 
     /// Safety: Can only map an interface value once.
@@ -256,14 +237,15 @@ impl<const PAGE_SIZE: usize> OwnedExmapFd<PAGE_SIZE> {
         assert!(MMAP_INTERFACE <= PAGE_SIZE);
 
         // Initialize the exmap vma with its size
-        let vmmap = self.mmap_vm(exmap_size)?;
+        let data = self.mmap_vm(exmap_size)?;
 
         // Configure exmap
         let _ = self.setup(backing_fd, max_interfaces, buffer_size)?;
 
         Ok(VirtMem {
             exmap_fd: self.as_fd(),
-            vmmap,
+            data,
+            size: exmap_size,
             backing_fd,
         })
     }
@@ -315,7 +297,8 @@ impl<'a> BorrowedExmapFd<'a> {
 pub struct VirtMem<'a, 'b, const PAGE_SIZE: usize> {
     exmap_fd: BorrowedExmapFd<'a>,
     backing_fd: Option<BorrowedFd<'b>>,
-    vmmap: VMMap,
+    data: *mut u8,
+    size: usize,
 }
 
 impl<'a, 'b, const P: usize> VirtMem<'a, 'b, P> {
@@ -327,10 +310,39 @@ impl<'a, 'b, const P: usize> VirtMem<'a, 'b, P> {
         todo!()
     }
 
+    #[inline]
+    pub fn as_ptr(&self) -> *const u8 {
+        self.data
+    }
+
+    #[inline]
+    pub fn as_mut_ptr(&self) -> *mut u8 {
+        self.data
+    }
+
+    #[inline]
+    pub fn size(&self) -> usize {
+        self.size
+    }
+
     pub fn unmap(self) {
-        self.vmmap.unmap();
+        println!("unmap vmmap");
+        unsafe { mm::munmap(self.as_mut_ptr().cast(), self.size()) }.unwrap();
     }
 }
+
+impl<'a, 'b, const P: usize> AsRef<[u8]> for VirtMem<'a, 'b, P> {
+    fn as_ref(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.as_ptr(), self.size()) }
+    }
+}
+
+impl<'a, 'b, const P: usize> AsMut<[u8]> for VirtMem<'a, 'b, P> {
+    fn as_mut(&mut self) -> &mut [u8] {
+        unsafe { std::slice::from_raw_parts_mut(self.as_mut_ptr(), self.size()) }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

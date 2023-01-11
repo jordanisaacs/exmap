@@ -10,7 +10,7 @@ use rustix::{
 fn main() {
     let threads = 4;
     let exmap_fd = OwnedExmapFd::<4096>::open().unwrap();
-    let exmap = exmap_fd
+    let mut exmap = exmap_fd
         .create(
             threads as usize * 4 * 1024 * 1024,
             threads,
@@ -26,6 +26,7 @@ fn main() {
 
     interface.push(10, 2).unwrap();
     interface.push(2090, 10).unwrap();
+    interface.push(4095, 1).unwrap();
 
     println!("testing");
 
@@ -39,6 +40,11 @@ fn main() {
     for v in interface.iter() {
         println!("{} {}", v.res, v.pages)
     }
+
+    let size = exmap.size();
+    let x = exmap.as_mut();
+    x[0] = 3;
+    x[size - 1] = 10;
 
     let mut interface = interface.into_iov();
     for i in 0..5 {
