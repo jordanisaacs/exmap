@@ -370,12 +370,15 @@ rec {
       };
       "exmap" = rec {
         crateName = "exmap";
-        version = "0.1.0";
+        version = "0.0.1";
         edition = "2021";
         crateBin = [
           { name = "exmap"; path = "src/bin.rs"; }
         ];
         src = lib.cleanSourceWith { filter = sourceFilter;  src = ./.; };
+        authors = [
+          "Jordan Isaacs <mail@jdisaacs.com>"
+        ];
         dependencies = [
           {
             name = "rustix";
@@ -385,10 +388,6 @@ rec {
           {
             name = "sc";
             packageId = "sc";
-          }
-          {
-            name = "thiserror";
-            packageId = "thiserror";
           }
         ];
         buildDependencies = [
@@ -660,7 +659,7 @@ rec {
         features = {
           "default" = [ "proc-macro" ];
         };
-        resolvedDefaultFeatures = [ "default" "proc-macro" ];
+        resolvedDefaultFeatures = [ "proc-macro" ];
       };
       "quote" = rec {
         crateName = "quote";
@@ -681,7 +680,7 @@ rec {
           "default" = [ "proc-macro" ];
           "proc-macro" = [ "proc-macro2/proc-macro" ];
         };
-        resolvedDefaultFeatures = [ "default" "proc-macro" ];
+        resolvedDefaultFeatures = [ "proc-macro" ];
       };
       "regex" = rec {
         crateName = "regex";
@@ -913,47 +912,6 @@ rec {
           "test" = [ "syn-test-suite/all-features" ];
         };
         resolvedDefaultFeatures = [ "clone-impls" "default" "derive" "extra-traits" "full" "parsing" "printing" "proc-macro" "quote" "visit-mut" ];
-      };
-      "thiserror" = rec {
-        crateName = "thiserror";
-        version = "1.0.38";
-        edition = "2018";
-        sha256 = "1l7yh18iqcr2jnl6qjx3ywvhny98cvda3biwc334ap3xm65d373a";
-        authors = [
-          "David Tolnay <dtolnay@gmail.com>"
-        ];
-        dependencies = [
-          {
-            name = "thiserror-impl";
-            packageId = "thiserror-impl";
-          }
-        ];
-
-      };
-      "thiserror-impl" = rec {
-        crateName = "thiserror-impl";
-        version = "1.0.38";
-        edition = "2018";
-        sha256 = "0vzkcjqkzzgrwwby92xvnbp11a8d70b1gkybm0zx1r458spjgcqz";
-        procMacro = true;
-        authors = [
-          "David Tolnay <dtolnay@gmail.com>"
-        ];
-        dependencies = [
-          {
-            name = "proc-macro2";
-            packageId = "proc-macro2";
-          }
-          {
-            name = "quote";
-            packageId = "quote";
-          }
-          {
-            name = "syn";
-            packageId = "syn";
-          }
-        ];
-
       };
       "unicode-ident" = rec {
         crateName = "unicode-ident";

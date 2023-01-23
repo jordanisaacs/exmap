@@ -11,6 +11,7 @@
       url = "github:jordanisaacs/kernel-module-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    exmap.url = "github:jordanisaacs/exmap-module";
   };
 
   outputs = {
@@ -20,6 +21,7 @@
     neovim-flake,
     crate2nix,
     kernelFlake,
+    exmap,
     ...
   }: let
     system = "x86_64-linux";
@@ -65,6 +67,7 @@
 
     linuxDev = pkgs.linuxPackagesFor kernelDrv;
     kernel = linuxDev.kernel;
+    exmapModule = exmap.lib.buildExmap kernel;
 
     modules = [exmapModule];
     initramfs = kernelLib.buildInitramfs {
@@ -77,24 +80,6 @@
         mknod -m 666 /dev/exmap c 254 0
       '';
     };
-
-    buildExmapModule = kernel:
-      (kernelLib.buildCModule {inherit kernel;} {
-        name = "exmap";
-        src = ./module;
-        dontStrip = true;
-      })
-      .overrideAttrs (old: {
-        outputs = ["out" "dev"];
-        installPhase =
-          old.installPhase
-          + ''
-            mkdir -p $dev/include
-            cp -r linux $dev/include
-          '';
-      });
-
-    exmapModule = buildExmapModule kernel;
 
     runQemu = kernelLib.buildQemuCmd {inherit kernel initramfs enableGdb;};
     runGdb = kernelLib.buildGdbCmd {inherit kernel modules;};
@@ -147,10 +132,6 @@
     compileFlags = "-I${kernel.dev}/lib/modules/${kernel.modDirVersion}/source/include";
   in
     with pkgs; {
-      lib = {
-        inherit buildExmapModule;
-      };
-
       packages.${system} = {
         inherit exmapExample exmapModule;
       };

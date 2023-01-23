@@ -14,7 +14,6 @@ use rustix::{
     mm::{self, MapFlags, ProtFlags},
 };
 use sys::EXMAP_OFF_INTERFACE;
-use thiserror::Error;
 
 pub struct InterfaceIov;
 pub struct InterfaceResult;
@@ -149,12 +148,6 @@ impl<'b> IndexMut<u16> for InterfaceWrapper<'b, InterfaceIov> {
 
         unsafe { &mut (*self.data).anon1.iov[usize::from(index)].anon1.anon1 }
     }
-}
-
-#[derive(Error, Debug)]
-pub enum InterfaceIndexError {
-    #[error("index is out of bounds")]
-    OutOfBounds,
 }
 
 #[derive(Debug)]
